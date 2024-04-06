@@ -106,7 +106,7 @@ You should explicitly override the alias to avoid introducing a [cache poisoning
 
 ## Propagating Entries Across All Enabled Sites
 
-In the settings for each Channel Section is an option to propagate entries in that section across all sites. This is enabled by default, and is the only option for Single sections.
+In the settings for each Section is an option to propagate entries in that section across all sites. This is enabled by default, and is the only option for Single sections.
 
 When enabled, Craft will create the new entry in each site enabled for that section using the submitted content.
 
