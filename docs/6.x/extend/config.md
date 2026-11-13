@@ -8,7 +8,7 @@ This is populated with values according to [the process below](#config-files), a
 You can get an instance of your plugin’s settings from anywhere (after booting) via the container…
 
 ```php
-$settings = app(\CraftCms\DemoPlugin\Demo)->getSettings();
+$settings = app(\CraftCms\DemoPlugin\Demo::class)->getSettings();
 ```
 
 …or the static instance getter:
@@ -19,7 +19,12 @@ $settings = CraftCms\DemoPlugin\Demo::getInstance()->getSettings();
 
 ## Config Files
 
-If you want a user-space config file, add a `config/my-plugin-handle.php` to the root of your package and it will be published by the `CraftCms\Cms\Plugin\Concerns\HasConfig` plugin trait, automatically.
+If you want a user-space config file, add a `config/my-plugin-handle.php` to the root of your package.
+The `CraftCms\Cms\Plugin\Concerns\HasConfig` trait registers it for publishing to `config/craft/my-plugin-handle.php`:
+
+```bash
+ddev artisan vendor:publish --tag=my-plugin-handle
+```
 
 The final config map your plugin’s settings model is initialized with will be composed from multiple sources:
 
@@ -62,21 +67,23 @@ Places you’d use `Craft::createObject()` can be mostly replaced with `app()->m
 ## Settings Form
 
 The `CraftCms\Cms\Plugin\Concerns\HasSettings` trait gives your plugin a `hasCpSettings` property; set this to `true` to give your plugin a tile in the **Settings** screen of the control panel, and a dedicated settings page.
-Craft handles all the routing, so you only need to implement a `settingsForm()` method:
+Craft provides the form wrapper, submission route, and Save action. Implement `settingsUi()` to return the fields:
 
 ```php
-use CraftCms\Cms\Form\Form;
-use CraftCms\Cms\Form\FormContext;
-use CraftCms\Cms\Form\Controls\Text;
-use CraftCms\Cms\Form\Nodes\Field;
+use CraftCms\Cms\Ui\Ui;
+use CraftCms\Cms\Ui\UiContext;
+use CraftCms\Cms\Ui\Controls\Text;
+use CraftCms\Cms\Ui\Nodes\Field;
+
+use function CraftCms\Cms\t;
 
 #[\Override]
-protected function settingsForm(FormContext $context = new FormContext): ?Form
+public function settingsUi(UiContext $context = new UiContext): ?Ui
 {
-    return Form::make([
+    return Ui::make([
         Field::make(t('API Key', category: 'my-plugin'), Text::make('apiKey'))
             ->instructions(t('The access key you generated when creating your account.', category: 'my-plugin'))
-            ->required();
+            ->required(),
     ]);
 }
 ```
@@ -89,23 +96,28 @@ Only plugin settings defined in a published config file are pushed into the glob
 This means that the presence of a key in `craft.plugin-handle` is an indication that the setting (and everything downstream of it) is controlled from a config file:
 
 ```php
-use CraftCms\Cms\Form\Nodes\Callout;
+use CraftCms\Cms\Ui\Nodes\Callout;
+use CraftCms\Cms\Ui\Ui;
+use CraftCms\Cms\Ui\UiContext;
+use Illuminate\Support\Arr;
+
+use function CraftCms\Cms\t;
 
 #[\Override]
-protected function settingsForm(FormContext $context = new FormContext): ?Form
+public function settingsUi(UiContext $context = new UiContext): ?Ui
 {
     // Get the whole static config array (so `nulls` are significant):
-    $overrides = config(sprintf('craft.%s', $this->handle));
+    $overrides = config(sprintf('craft.%s', $this->handle), []);
 
-    $form = Form::make([
+    $ui = Ui::make([
         // ...
     ]);
 
     if (Arr::has($overrides, 'someSetting')) {
-        $form->add(Callout::make('sections-override-alert', t('Section configuration is being overridden by `{file}`.', ['file' => 'config/craft/guest-entries.php'], 'guest-entries'))->variant('warning'))
+        $ui->add(Callout::make('sections-override-alert', t('Section configuration is being overridden by `{file}`.', ['file' => 'config/craft/guest-entries.php'], 'guest-entries'))->variant('warning'));
     }
 
-    return $form;
+    return $ui;
 }
 ```
 
@@ -127,17 +139,17 @@ public function getRules(): array
 }
 
 // ...or:
-public function rulesClass(): string
+public function ruleset(): string
 {
     return MyPluginSettingsRuleset::class;
 }
 ```
 
-You may also tag the settings model with the `#[Ruleset(MyPluginSettingsRuleset::class)]` attribute.
-For more control over how your settings data is normalized, return your own [form request](validation#form-request-validation) class from `getSettingsRequestClass()`.
+You may also tag the settings model with the `#[\CraftCms\RulesetValidation\Attributes\Ruleset(MyPluginSettingsRuleset::class)]` attribute.
+For more control over how your settings data is normalized, return your own [form request](validation.md#form-requests) class from `getSettingsRequestClass()`.
 
 When using a custom `FormRequest`, your rules are evaluated against the entire request, not just the nested `settings` key that Craft ordinarily assigns to your settings model.
-The example above (validating `adminNotificationsAddress` on the settings model) would need to be updated to `settings.adminNotificationsAddress` if returned from `FormRequest::rules()`.
+The example above (validating `adminNotificationAddress` on the settings model) would need to be updated to `settings.adminNotificationAddress` if returned from `FormRequest::rules()`.
 
 ::: tip
 See our [Guest Entries](repo:craftcms/guest-entries/tree/5.x) plugin for an example of these new techniques.
